@@ -28,13 +28,20 @@ that talk to each other through explicit service interfaces, never through each 
 
 ## Quick start (Docker Compose)
 
+**Every command for running, testing and operating the app lives in [RUNNING.md](RUNNING.md).** The
+short version:
+
 ```bash
 git clone https://github.com/anugrahyadav1594/upgraded-telegram.git
 cd upgraded-telegram
-cp .env.example .env                 # replace every CHANGE_ME value
-docker compose -f infrastructure/docker-compose.yml up -d --build
+cp .env.example .env                 # replace every CHANGE_ME value (see below)
+docker compose -f infrastructure/docker-compose.yml --env-file .env up -d --build
 open http://localhost:8080           # the SPA; /api and /ws are proxied to the backend
 ```
+
+`--env-file .env` is explicit on purpose: with `-f` pointing at a compose file in another directory,
+Compose resolves `.env` relative to that file, so being explicit makes the command work from the
+repository root on every Compose version.
 
 `SESSION_SECRET` and `POSTGRES_PASSWORD` must be set before the stack will start — the compose file
 refuses to substitute placeholders, and the backend's production validator refuses to boot with them.
@@ -55,11 +62,11 @@ without one:
 
 ```bash
 # 1. Generate a hash from the backend image, using the same encoder that verifies logins.
-docker compose -f infrastructure/docker-compose.yml run --rm --entrypoint sh backend \
-  -c 'java -jar /app/app.jar --hash-password "$DEV_SEED_PASSWORD"'
+docker compose -f infrastructure/docker-compose.yml --env-file .env \
+  run --rm --entrypoint sh backend -c 'java -jar /app/app.jar --hash-password "$DEV_SEED_PASSWORD"'
 
 # 2. Put the printed PHC string in .env as SEED_PASSWORD_HASH, then apply the seed.
-docker compose -f infrastructure/docker-compose.yml --profile seed run --rm seed
+docker compose -f infrastructure/docker-compose.yml --env-file .env --profile seed run --rm seed
 ```
 
 ---
@@ -67,11 +74,14 @@ docker compose -f infrastructure/docker-compose.yml --profile seed run --rm seed
 ## Local development (hot reload)
 
 ```bash
-docker compose -f infrastructure/docker-compose.yml up -d postgres redis   # infrastructure only
+docker compose -f infrastructure/docker-compose.yml --env-file .env up -d postgres redis
 
 cd backend  && ./mvnw spring-boot:run        # http://localhost:8080  (profile: dev)
 cd frontend && npm install && npm run dev    # http://localhost:5173  (proxies /api and /ws)
 ```
+
+Note that Spring Boot does **not** read `.env` — export the credentials in your shell (or use the
+throwaway containers documented in [RUNNING.md](RUNNING.md), which match the dev-profile defaults).
 
 The Vite dev server proxies `/api` and `/ws` to the backend so the browser only ever sees one origin —
 the same shape as production, which is what keeps the session cookie first-party and `SameSite=Lax`

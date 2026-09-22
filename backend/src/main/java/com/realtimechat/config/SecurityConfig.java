@@ -70,15 +70,38 @@ public class SecurityConfig {
     }
 
     /**
-     * Argon2id with the OWASP baseline parameters (19 MiB memory, 2 iterations, 1 lane).
+     * Argon2id with the OWASP baseline parameters: 19 MiB memory, 2 iterations, 1 lane, 16-byte salt,
+     * 32-byte hash — the exact values documented in {@code docs/security-design.md §3} and
+     * required by NFR-S-1.
      *
      * <p>Chosen over bcrypt/PBKDF2 because it is memory-hard, which raises the cost of GPU-backed
-     * cracking. Parameters are encoded in each hash, so they can be raised later and existing
-     * hashes are upgraded transparently on the next successful login.
+     * cracking. The parameters are encoded in every hash, so they can be raised later and existing
+     * hashes upgraded transparently on the next successful login.
+     *
+     * <p>Declared as a static factory rather than inline in the bean so that the one place which
+     * creates hashes outside a request — the {@code --hash-password} utility used to prepare the
+     * development seed — produces hashes this configuration will verify. Spring's
+     * {@code defaultsForSpringSecurity_v5_8()} is deliberately *not* used: its 16 MiB memory setting
+     * would silently disagree with the documentation.
      */
+    public static PasswordEncoder argon2idPasswordEncoder() {
+        return new Argon2PasswordEncoder(SALT_LENGTH_BYTES, HASH_LENGTH_BYTES, PARALLELISM, MEMORY_KIB, ITERATIONS);
+    }
+
+    /** Salt size in bytes; 16 is the Argon2 recommendation and is stored inside the PHC string. */
+    private static final int SALT_LENGTH_BYTES = 16;
+    /** Output hash size in bytes. */
+    private static final int HASH_LENGTH_BYTES = 32;
+    /** Degree of parallelism (lanes). */
+    private static final int PARALLELISM = 1;
+    /** Memory cost in KiB — 19 MiB, the OWASP baseline. */
+    private static final int MEMORY_KIB = 19456;
+    /** Time cost: number of passes over memory. */
+    private static final int ITERATIONS = 2;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+        return argon2idPasswordEncoder();
     }
 
     @Bean

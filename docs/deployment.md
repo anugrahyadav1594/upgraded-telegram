@@ -20,7 +20,7 @@ Three supported ways to run the system, from simplest to most production-like.
 git clone <repository-url> realtime-chat
 cd realtime-chat
 cp .env.example .env          # then edit: at minimum POSTGRES_PASSWORD and SESSION_SECRET
-docker compose -f infrastructure/docker-compose.yml up -d --build
+docker compose -f infrastructure/docker-compose.yml --env-file .env up -d --build
 ```
 
 What starts:
@@ -66,16 +66,37 @@ docker compose -f infrastructure/docker-compose.yml down -v       # also delete 
 ### Infrastructure only
 
 ```bash
-docker compose -f infrastructure/docker-compose.yml up -d postgres redis
+docker compose -f infrastructure/docker-compose.yml --env-file .env up -d postgres redis
+```
+
+Alternatively, start containers that match the `dev` profile defaults, so no environment variables are
+needed at all:
+
+```bash
+docker run --rm -d --name realchat-postgres \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=realtime_chat \
+  -p 127.0.0.1:5432:5432 postgres:16-alpine
+docker run --rm -d --name realchat-redis -p 127.0.0.1:6379:6379 redis:7-alpine
 ```
 
 ### Backend
 
 ```bash
 cd backend
-cp ../.env.example .env                      # loaded automatically in the dev profile
-./mvnw spring-boot:run                        # http://localhost:8080
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+./mvnw spring-boot:run                        # http://localhost:8080 (dev profile is the default)
+```
+
+Spring Boot does **not** read `.env` — that file is consumed by Docker Compose. When the backend runs
+on your host against the compose services, export the values yourself (host names are `localhost`, not
+the compose service names):
+
+```bash
+export SPRING_PROFILES_ACTIVE=dev
+export DATABASE_URL=jdbc:postgresql://localhost:5432/realtime_chat
+export DATABASE_USERNAME="${POSTGRES_USER:-realtime_chat}"
+export DATABASE_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' ../.env | cut -d= -f2-)"
+export REDIS_HOST=localhost
+export REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' ../.env | cut -d= -f2-)"
 ```
 
 - Flyway runs migrations on startup (`spring.flyway.enabled=true`).
@@ -115,6 +136,7 @@ Copy `.env.example` → `.env`. Nothing secret is ever committed.
 | `REDIS_PORT` | no | `6379` | |
 | `REDIS_PASSWORD` | prod | — | |
 | `SESSION_SECRET` | prod | — | HMAC key for CSRF/cursor signing; ≥ 32 random bytes; app refuses to start in `prod` with the placeholder |
+| `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` | no | `5432` / `6379` | Host ports published by compose **on 127.0.0.1 only**, for local tooling (`psql`, `redis-cli`, a backend running on the host) |
 | `SESSION_COOKIE_SECURE` | no | `true` (`false` in dev over http) | |
 | `SESSION_IDLE_TIMEOUT` | no | `7d` | idle expiry |
 | `SESSION_ABSOLUTE_TIMEOUT` | no | `30d` | absolute expiry |
@@ -252,6 +274,7 @@ files.
 | --- | --- | --- |
 | Backend exits on startup with `FlywayValidateException` | Edited an applied migration | restore the file; add a new migration |
 | `401` on every request behind a proxy | `SESSION_COOKIE_SECURE=true` over plain HTTP, or missing `X-Forwarded-Proto` | set `server.forward-headers-strategy=framework` (default in compose) / use HTTPS |
+| `set POSTGRES_PASSWORD in .env` at start-up | `.env` missing at the root, or Compose resolved it relative to the compose file's directory | pass `--env-file .env` explicitly (as in §2) |
 | Cookie not set at all | Cross-site frontend origin | serve the SPA through the same origin (nginx) or set `CORS_ALLOWED_ORIGINS` + `SameSite=None; Secure` |
 | WebSocket stuck `RECONNECTING` | `Origin` not allow-listed, or proxy missing upgrade headers | add the origin / check `proxy_set_header Upgrade` in nginx |
 | Messages appear with a delay | slow consumer disconnected, or the peer is offline (by design) | expected: offline users get history on next load |

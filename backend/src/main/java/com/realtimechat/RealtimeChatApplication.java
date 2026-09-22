@@ -1,12 +1,13 @@
 package com.realtimechat;
 
 import com.realtimechat.config.AppProperties;
+import com.realtimechat.config.SecurityConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+
 
 /**
  * Application entry point.
@@ -62,8 +63,8 @@ public class RealtimeChatApplication {
     }
 
     /**
-     * Prints an Argon2id hash using the same encoder the application verifies logins with, so a hash
-     * generated here is guaranteed to be accepted at sign-in.
+     * Prints an Argon2id hash using the same encoder the application verifies logins with — the
+     * parameters live in one place — so a hash generated here is guaranteed to be accepted at sign-in.
      *
      * <p>The password is read from the command line (or an environment variable expanded by the
      * shell) and never logged: only the hash reaches standard output.
@@ -73,7 +74,7 @@ public class RealtimeChatApplication {
             System.err.println("Refusing to hash an empty password.");
             System.exit(2);
         }
-        String hash = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8().encode(password);
+        String hash = SecurityConfig.argon2idPasswordEncoder().encode(password);
         System.out.println(hash);
         System.exit(0);
     }
