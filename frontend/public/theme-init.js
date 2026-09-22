@@ -15,7 +15,7 @@
     var dark = stored === 'dark' || (stored === 'system' && prefersDark);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     document.documentElement.dataset.themePreference = stored;
-  } catch (error) {
+  } catch {
     // Private browsing without storage, or a locked-down client: fall back to light and carry on.
     document.documentElement.dataset.theme = 'light';
   }
