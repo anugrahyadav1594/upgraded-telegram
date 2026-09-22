@@ -103,19 +103,64 @@ The seed creates `@alex`, `@ghost`, `@developer` and `@testuser` with obviously-
 profiles. It contains **no plaintext password**: it takes an Argon2id hash, and refuses to run without
 one.
 
+**What `SEED_PASSWORD_HASH` is:** the Argon2id hash of `DEV_SEED_PASSWORD`, in the PHC format the
+database stores:
+
+```
+$argon2id$v=19$m=19456,t=2,p=1$<16-byte salt, base64>$<32-byte hash, base64>
+   │       │      │        │        │        └── the hash itself
+   │       │      │        │        └────────── the random salt, unique per password
+   │       │      │        └─────────────────── p=1 lane, t=2 passes, m=19 MiB (OWASP baseline)
+   │       │      └──────────────────────────── Argon2 version 19
+   │       └─────────────────────────────────── Argon2id — memory-hard, GPU-resistant
+   └─────────────────────────────────────────── the standard password-hash prefix
+```
+
+Two different values are involved and they are easy to mix up:
+
+| Value | Where it goes | What it is |
+| --- | --- | --- |
+| `DEV_SEED_PASSWORD` | `.env` | The password you **type** when signing in as `@alex` etc. The application never reads this variable — it exists only as the input to the command below. |
+| `SEED_PASSWORD_HASH` | `.env`, then the database | The **hashed** form, which is the only thing the seed (and the database) ever sees |
+
+The seed **refuses to run without it**, and rejects anything that is not an `$argon2id$…` string. That
+is the point: a seed file with a plaintext password, or with a hard-coded hash, is a credential leak
+waiting to be reused on a real deployment.
+
+**Generate your own (recommended):**
+
 ```bash
-# 1. Generate a hash from the built backend image (uses the same encoder that verifies logins).
+# 1. Generate the hash from the built backend image, using the same encoder that verifies logins.
 docker compose -f infrastructure/docker-compose.yml --env-file .env \
   run --rm --entrypoint sh backend -c 'java -jar /app/app.jar --hash-password "$DEV_SEED_PASSWORD"'
 
-# 2. Put the printed $argon2id$… string in .env as SEED_PASSWORD_HASH, then:
+# 2. Paste the single $argon2id$… line it prints into .env as SEED_PASSWORD_HASH.
 
 # 3. Apply the seed.
 docker compose -f infrastructure/docker-compose.yml --env-file .env \
   --profile seed run --rm seed
 ```
 
-Sign in as any of those handles with the password you set as `DEV_SEED_PASSWORD`.
+**Or use this ready-made pair** (a development convenience — it is a *public* password, so use it only
+on a database nobody else can reach):
+
+```bash
+# In .env:
+DEV_SEED_PASSWORD=dev-only-Passphrase-2026!
+SEED_PASSWORD_HASH=$argon2id$v=19$m=19456,t=2,p=1$a7gwIaUfuXLImcxjrEFHWQ$zpsiws/kERMz5fKzep5H2ueSvq0g66nDRvte8kH7BoM
+```
+
+> Quote the hash in `.env` if your shell or `.env` parser struggles with the `$` characters:
+> `SEED_PASSWORD_HASH='$argon2id$…'`. Compose passes it through verbatim either way; the `$` only
+> matters where a shell expands the value.
+
+Sign in as `@alex`, `@ghost`, `@developer` or `@testuser` with `DEV_SEED_PASSWORD`. Note the asymmetry:
+**the hash goes in `.env`; the plaintext is what you type at the login screen.**
+
+Needing something other than Docker? The hash is standard PHC Argon2id, so any implementation works —
+for example `python -m pip install argon2-cffi` and hash with `time_cost=2, memory_cost=19456,
+parallelism=1, hash_len=32, salt_len=16`, type `ID`. The parameters are the ones in
+[docs/security-design.md](docs/security-design.md) §3 and must match, or sign-in will reject the hash.
 
 ### A6. Logs, restart, stop
 

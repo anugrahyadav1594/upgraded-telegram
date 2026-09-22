@@ -65,9 +65,13 @@ without one:
 docker compose -f infrastructure/docker-compose.yml --env-file .env \
   run --rm --entrypoint sh backend -c 'java -jar /app/app.jar --hash-password "$DEV_SEED_PASSWORD"'
 
-# 2. Put the printed PHC string in .env as SEED_PASSWORD_HASH, then apply the seed.
+# 2. Put the printed $argon2id$… string in .env as SEED_PASSWORD_HASH, then apply the seed.
 docker compose -f infrastructure/docker-compose.yml --env-file .env --profile seed run --rm seed
 ```
+
+`SEED_PASSWORD_HASH` is the Argon2id hash of `DEV_SEED_PASSWORD` — the hash goes in `.env`, the
+plaintext is what you type at the sign-in screen. [RUNNING.md](RUNNING.md#a5-optional--the-development-accounts)
+explains the format, why the seed refuses to run without it, and offers a ready-made development pair.
 
 ---
 

@@ -41,10 +41,21 @@ public class AuthService {
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final Logger securityLog = LoggerFactory.getLogger("SECURITY");
 
-    /** Verified against when the identifier is unknown, to keep the timing profile similar. */
+    /**
+     * A real Argon2id hash of a password nobody knows, verified against when the identifier is
+     * unknown, disabled, or locked — so those paths cost the same CPU as a wrong password instead of
+     * returning in microseconds and leaking which accounts exist.
+     *
+     * <p>It has to be a *well-formed* hash: {@code matches()} decodes the PHC string first, and a
+     * malformed one throws instead of returning false, which would turn "account does not exist" into
+     * a 500. Generated with the same parameters the application uses
+     * (m=19456, t=2, p=1, 16-byte salt, 32-byte output), so the decoy is indistinguishable in shape
+     * from a genuine stored hash. The salt is fixed only to keep this literal reproducible; the
+     * password behind it is a hash of a constant, never a credential.
+     */
     private static final String DUMMY_HASH =
-            "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$"
-                    + "K0dWQ0h0S0hMV2lXR3lFWWl0cUpvY2lLQUFBQUFBQUFBQUFBQQ";
+            "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$"
+                    + "H56bdPyK75LrcLycUA912ewAh2L7W32stsmC4fYltn8";
 
     private final UserRepository userRepository;
     private final UserAccountService userAccountService;
