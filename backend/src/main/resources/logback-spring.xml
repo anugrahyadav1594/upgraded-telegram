@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging configuration.
+
+  Rules (docs/security-design.md §7):
+    * NEVER log passwords, password hashes, session tokens, reset tokens or message content.
+    * Security-relevant events (login, logout, password change, authorization failure,
+      rate-limit trips, moderation decisions) are logged at INFO/WARN with the request id.
+    * requestId and userId are pushed into the MDC by RequestIdFilter /
+      SessionAuthenticationFilter so every line is correlatable without logging secrets.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="!prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg %X{requestId:-}%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="ch.qos.logback.classic.encoder.JsonEncoder"/>
+        </appender>
+    </springProfile>
+
+    <!-- Dedicated security event logger: kept separate so it can be shipped to a SIEM sink
+         without dragging in application noise. -->
+    <logger name="SECURITY" level="INFO" additivity="true"/>
+
+    <!-- Chat event logger: message lifecycle without content. -->
+    <logger name="CHAT_EVENTS" level="INFO" additivity="true"/>
+
+    <logger name="org.springframework.web.socket" level="INFO"/>
+    <logger name="org.hibernate.orm.connections.pooling" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -1,0 +1,15 @@
+{
+  "name": "realtime-chat-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "End-to-end browser tests for REALCHAT (Playwright).",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

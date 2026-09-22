@@ -1,0 +1,309 @@
+# =====================================================================================
+# Base configuration. Profile-specific files override (dev / docker / prod).
+# Every value can be overridden by an environment variable — see .env.example and
+# docs/deployment.md §4.
+# =====================================================================================
+spring:
+  application:
+    name: realtime-chat
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/realtime_chat}
+    username: ${DATABASE_USERNAME:realtime_chat}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 3000
+      validation-timeout: 2000
+      max-lifetime: 1800000
+      pool-name: chat-pool
+
+  jpa:
+    # The schema is owned by Flyway. `validate` makes a mismatch a startup failure instead of
+    # a silent runtime surprise.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+        query:
+          in_clause_parameter_padding: true
+          fail_on_pagination_over_collection_fetch: true
+        format_sql: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      # Unknown fields are rejected: a client sending "role" or "emailVerified" gets a 400
+      # instead of having the field silently ignored (mass-assignment protection).
+      fail-on-unknown-properties: true
+      fail-on-null-for-primitives: false
+    time-zone: UTC
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
+
+  threads:
+    virtual:
+      enabled: false
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 500
+      thread-name-prefix: chat-async-
+    scheduling:
+      pool:
+        size: 2
+      thread-name-prefix: chat-scheduler-
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,application/javascript
+  tomcat:
+    max-http-form-post-size: 1MB
+    max-swallow-size: 1MB
+    threads:
+      max: 200
+      min-spare: 10
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+# =====================================================================================
+# Application configuration (typed in config/AppProperties.java)
+# =====================================================================================
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:5173}
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+    allow-credentials: true
+
+  session:
+    cookie-name: session
+    csrf-cookie-name: XSRF-TOKEN
+    csrf-header-name: X-XSRF-TOKEN
+    secure-cookie: ${SESSION_COOKIE_SECURE:true}
+    same-site: Lax
+    idle-timeout: ${SESSION_IDLE_TIMEOUT:7d}
+    absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT:30d}
+    # Extend last_used_at/expires_at at most this often per session (sliding expiration).
+    touch-interval: 1h
+    cache-ttl: 5m
+    secret: ${SESSION_SECRET:}
+
+  websocket:
+    endpoint: /ws
+    # Origins allowed to open a WebSocket (never "*" with credentials).
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+    connect-timeout: 10s
+    heartbeat-incoming: 10s
+    heartbeat-outgoing: 10s
+    send-buffer-size-limit: 524288
+    send-time-limit-ms: 20000
+    max-sessions-per-user: 5
+    max-frame-size-bytes: 16384
+
+  pagination:
+    default-limit: 25
+    max-limit: 100
+    message-default-limit: 50
+    message-max-limit: 100
+    cursor-secret: ${SESSION_SECRET:}
+
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    login-per-ip: 10
+    login-per-account: 5
+    login-window: 15m
+    register-per-ip: 5
+    register-window: 1h
+    password-reset-per-email: 3
+    password-reset-window: 1h
+    search-per-user: 60
+    search-window: 1m
+    conversations-per-user: 30
+    conversations-window: 1h
+    messages-per-user: 30
+    messages-window: 1m
+    messages-per-day-per-user: 600
+    reports-per-user: 10
+    reports-window: 1d
+    handshake-per-ip: 60
+    handshake-window: 1m
+
+  messaging:
+    max-content-length: 4000
+    edit-window: 48h
+    typing-ttl: 5s
+    message-page-size: 50
+    # Curated allow-list (32). Anything else is rejected with a validation error, which keeps
+    # arbitrary unicode payloads out of the database while still feeling expressive.
+    allowed-reactions:
+      - "😀"
+      - "😂"
+      - "😍"
+      - "🥰"
+      - "😎"
+      - "🤔"
+      - "😢"
+      - "😡"
+      - "👍"
+      - "👎"
+      - "👏"
+      - "🙏"
+      - "🔥"
+      - "🎉"
+      - "❤️"
+      - "💙"
+      - "✅"
+      - "❌"
+      - "👀"
+      - "🤝"
+      - "💪"
+      - "🙈"
+      - "🤯"
+      - "😴"
+      - "🤗"
+      - "😅"
+      - "🤣"
+      - "😭"
+      - "🥳"
+      - "🤨"
+      - "😐"
+      - "🤷"
+
+  presence:
+    ttl: 60s
+    heartbeat-interval: 25s
+    last-seen-write-throttle: 5m
+    away-after: 5m
+
+  moderation:
+    max-description-length: 1000
+    auto-flag-report-threshold: 3
+    report-retention-days: 365
+
+  notifications:
+    preview-length: 120
+    retention-days: 90
+    async-core-pool-size: 2
+    async-max-pool-size: 8
+    async-queue-capacity: 500
+
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:no-reply@realtime-chat.local}
+
+  dev-seed:
+    enabled: ${DEV_SEED_ENABLED:false}
+    password: ${DEV_SEED_PASSWORD:}
+
+# =====================================================================================
+# Observability
+# =====================================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: db,redis,ping
+        liveness:
+          include: ping
+  health:
+    redis:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        chat.message.fanout.latency: true
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: realtime-chat
+    description: Pseudonymous real-time chat (modular monolith)
+    version: "@project.version@"
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.realtimechat: ${LOG_LEVEL_APP:INFO}
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    # Never log bindings for these packages at a verbose level.
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n"

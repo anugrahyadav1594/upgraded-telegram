@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="REALCHAT — a pseudonymous real-time chat application." />
+    <!-- Applied before first paint so the stored theme is honoured without a flash of the wrong colours.
+         Kept in its own file so the CSP can stay script-src 'self' with no inline exception. -->
+    <script src="/theme-init.js"></script>
+    <title>REALCHAT</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>REALCHAT needs JavaScript enabled to exchange messages.</noscript>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
