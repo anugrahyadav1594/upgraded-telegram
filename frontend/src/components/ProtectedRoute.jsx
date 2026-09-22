@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { LoadingBlock } from './Spinner.jsx';
+import { SessionUnavailable } from './SessionUnavailable.jsx';
 import { SessionStatus, useSessionStore } from '../state/session.js';
 
 /**
@@ -13,9 +14,13 @@ import { SessionStatus, useSessionStore } from '../state/session.js';
 export function ProtectedRoute({ requireCompleteProfile = true }) {
   const status = useSessionStore((state) => state.status);
   const user = useSessionStore((state) => state.user);
+  const error = useSessionStore((state) => state.error);
   const location = useLocation();
 
   if (status === SessionStatus.UNKNOWN) {
+    // An unresolved session with an error is a bug report waiting to happen if we show a spinner;
+    // say what went wrong and let the user try again.
+    if (error) return <SessionUnavailable />;
     return <LoadingBlock label="Checking your session…" />;
   }
 
@@ -32,8 +37,10 @@ export function ProtectedRoute({ requireCompleteProfile = true }) {
 
 export function PublicOnlyRoute() {
   const status = useSessionStore((state) => state.status);
+  const error = useSessionStore((state) => state.error);
 
   if (status === SessionStatus.UNKNOWN) {
+    if (error) return <SessionUnavailable />;
     return <LoadingBlock label="Checking your session…" />;
   }
   if (status === SessionStatus.AUTHENTICATED) {

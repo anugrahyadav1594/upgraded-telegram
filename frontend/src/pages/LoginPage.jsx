@@ -16,6 +16,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const login = useSessionStore((state) => state.login);
+  const sessionError = useSessionStore((state) => state.error);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -51,6 +52,12 @@ export function LoginPage() {
           Sign in with your email address or your username. Your handle is what other people see — your
           email is never shown to anyone.
         </p>
+
+        {sessionError ? (
+          <p className="alert alert--error" role="status">
+            {sessionError.message} You can still sign in if the API is reachable again.
+          </p>
+        ) : null}
 
         {error ? (
           <p className="alert alert--error" role="alert">

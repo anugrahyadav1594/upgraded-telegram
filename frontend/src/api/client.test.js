@@ -68,6 +68,57 @@ describe('request', () => {
     expect(error.isRetryable).toBe(true);
   });
 
+  it('gives up on a server that never answers instead of hanging forever', async () => {
+    // A fetch that only settles when aborted — the shape of a backend that is not listening, or a
+    // proxy holding the socket open. Without the deadline this promise never rejects.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+          }),
+      ),
+    );
+
+    const error = await request('/api/v1/auth/me', { timeout: 30 }).catch((thrown) => thrown);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.code).toBe('TIMEOUT');
+    expect(error.isRetryable).toBe(true);
+  });
+
+  it('does not mistake a caller cancellation for a timeout', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+          }),
+      ),
+    );
+
+    const pending = request('/api/v1/conversations', { signal: controller.signal, timeout: 5000 });
+    controller.abort();
+
+    const error = await pending.catch((thrown) => thrown);
+    expect(error.name).toBe('AbortError');
+    expect(error).not.toBeInstanceOf(ApiError);
+  });
+
+  it('explains a gateway error instead of saying "Something went wrong"', async () => {
+    // Exactly what Vite's dev proxy returns when the backend is not running: a status, no JSON body.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 502 })));
+
+    const error = await request('/api/v1/auth/me').catch((thrown) => thrown);
+
+    expect(error.code).toBe('BAD_GATEWAY');
+    expect(error.message).toMatch(/not running|still starting/i);
+    expect(error.isRetryable).toBe(true);
+  });
+
   it('returns null for 204 responses instead of throwing on empty bodies', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
     await expect(request('/api/v1/auth/logout', { method: 'POST' })).resolves.toBeNull();

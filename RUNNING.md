@@ -8,8 +8,8 @@ Two ways to run it:
 
 | | Use it for | Time to first request |
 | --- | --- | --- |
-| **[Path A — Docker Compose](#path-a--everything-in-docker)** | Demos, grading, anything you want to "just work" | ~2 minutes (mostly the first Maven build) |
-| **[Path B — Local development](#path-b--local-development-hot-reload)** | Editing code, hot reload on both sides | ~1 minute after dependencies are cached |
+| **[Path A — Docker Compose](#path-a-everything-in-docker)** | Demos, grading, anything you want to "just work" | ~2 minutes (mostly the first Maven build) |
+| **[Path B — Local development](#path-b-local-development-hot-reload)** | Editing code, hot reload on both sides | ~1 minute after dependencies are cached |
 
 ---
 
@@ -24,13 +24,67 @@ Check what you have:
 
 ```bash
 docker --version && docker compose version    # Path A + B
-java -version                                  # Path B (must report 21)
 node --version && npm --version                # Path B (Node 20.19+)
+
+# Path B also needs a JDK — and the check is JAVA_HOME, not `java`, for reasons below:
+echo "JAVA_HOME=$JAVA_HOME"
+"$JAVA_HOME/bin/java" -version 2>/dev/null || echo "JAVA_HOME is not pointing at a usable JDK"
 ```
+
+### If `./mvnw` says "The JAVA_HOME environment variable is not defined correctly"
+
+That message is Maven's, not the wrapper's, and it means Maven could not execute the JVM it resolved:
+`$JAVA_HOME/bin/java` does not exist, and neither does a `java` on the PATH it inherited. Maven needs a
+**JDK** (for `javac`), not a JRE — and setting `JAVA_HOME` is required even when plain `java -version`
+already works in your shell.
+
+Install a JDK 21 if you do not have one, then point `JAVA_HOME` at its directory (the one containing
+`bin/java` and `bin/javac`):
+
+**Windows — Git Bash or WSL**
+
+```bash
+# Git Bash: install with winget from PowerShell, or use the Adoptium installer, then:
+ls "/c/Program Files/Eclipse Adoptium/"            # e.g. jdk-21.0.5.11-hotspot
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-21.0.5.11-hotspot"
+
+# WSL / Ubuntu:
+sudo apt update && sudo apt install -y openjdk-21-jdk
+export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
+```
+
+**macOS**
+
+```bash
+brew install openjdk@21
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+```
+
+**Linux**
+
+```bash
+sudo apt install -y openjdk-21-jdk          # or your distribution's package
+export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
+```
+
+Confirm before running anything else:
+
+```bash
+echo "$JAVA_HOME"
+"$JAVA_HOME/bin/java" -version      # → openjdk version "21.x"
+"$JAVA_HOME/bin/javac" -version     # → javac 21.x  (if this is missing, you installed a JRE)
+```
+
+Make it permanent by adding the `export` line to `~/.bashrc` (Git Bash, WSL, Linux) or `~/.zshrc`
+(macOS), then reopen the shell. On Windows, setting `JAVA_HOME` as a system environment variable works
+too — Git Bash converts it automatically.
+
+> None of this is needed for **Path A**: the Docker build compiles the backend inside a Maven image, so
+> the host needs no JDK at all.
 
 ---
 
-## Path A — everything in Docker
+## Path A: everything in Docker
 
 ### A1. Get the code and configure it
 
@@ -92,12 +146,24 @@ Then open **<http://localhost:8080>**.
 | <http://localhost:8080/v3/api-docs> | OpenAPI JSON |
 | <http://localhost:8080/actuator/health> | Health (add `/readiness` or `/liveness`) |
 
-### A4. Create an account
+### A4. Sign in
 
-Register at <http://localhost:8080/register>. The username is your public handle; the email address is
-used only for sign-in and password recovery, and is never shown to anyone.
+**There are no built-in credentials.** A fresh database has no accounts, so either:
 
-### A5. Optional — the development accounts
+* **Register your own** at <http://localhost:8080/register> — the username is your public handle, the
+  email address is used only for sign-in and password recovery and is never shown to anyone; or
+* **Seed the four development accounts** with the next step, whose credentials are:
+
+| Username | Email (also accepted at sign-in) | Password |
+| --- | --- | --- |
+| `@alex` | `alex@example.test` | whatever you set as `DEV_SEED_PASSWORD` |
+| `@ghost` | `ghost@example.test` | same |
+| `@developer` | `developer@example.test` | same |
+| `@testuser` | `testuser@example.test` | same |
+
+Sign-in accepts **either** the username or the email address.
+
+### A5. Optional: the development accounts
 
 The seed creates `@alex`, `@ghost`, `@developer` and `@testuser` with obviously-marked `[DEV ACCOUNT]`
 profiles. It contains **no plaintext password**: it takes an Argon2id hash, and refuses to run without
@@ -183,7 +249,7 @@ docker compose -f infrastructure/docker-compose.yml --env-file .env down -v
 
 ---
 
-## Path B — local development (hot reload)
+## Path B: local development (hot reload)
 
 Both sides reload on save: Spring Boot DevTools restarts the backend, Vite hot-reloads the frontend.
 
@@ -372,6 +438,9 @@ because a production server with development settings is worse than one that doe
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `set POSTGRES_PASSWORD in .env` | `.env` missing, or Compose looked in `infrastructure/` | Pass `--env-file .env` (as above) and check the file exists at the repo root |
+| `The JAVA_HOME environment variable is not defined correctly` | `JAVA_HOME` is unset or points at a JRE, while Maven needs a JDK | Install JDK 21 and see [Java setup](#if-mvnw-says-the-java_home-environment-variable-is-not-defined-correctly). Or skip it entirely and use Path A |
+| Frontend shows "Can’t reach the server" | The API is not running, or is on a different port | Start the backend (`cd backend && ./mvnw spring-boot:run`) and press **Try again**; check `VITE_BACKEND_URL` in `frontend/.env.local` |
+| "Checking your session…" hangs | The API is unreachable and nothing answers the request | Fixed by a request deadline: you now get an explanation within 8 seconds instead of an endless spinner. If it still hangs, the backend is accepting connections but not responding — check its logs |
 | `bind: address already in use` | Something is already on 8080/5432/6379 | Change `HTTP_PORT` / `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` in `.env` |
 | Frontend loads, every request 502s | Backend still starting (Flyway + first boot) | Wait for `curl http://localhost:8080/actuator/health/readiness`, then `$rc logs backend` |
 | Redirected to the login screen immediately after signing in | Cookie dropped: cross-origin frontend | Serve the SPA from the same origin (nginx, as in Path A), or set `CORS_ALLOWED_ORIGINS` and `SESSION_SAME_SITE` deliberately |

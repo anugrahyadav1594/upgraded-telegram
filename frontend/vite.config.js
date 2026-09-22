@@ -23,6 +23,11 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_BACKEND_URL || 'http://localhost:8080',
         changeOrigin: true,
+        // Without a proxy timeout, a backend that is not running leaves the browser waiting on a
+        // socket that may never answer, and the app appears to hang while "checking the session".
+        // Failing after a few seconds produces a clear error the UI can show instead.
+        timeout: 10000,
+        proxyTimeout: 10000,
       },
       '/ws': {
         target: process.env.VITE_BACKEND_URL || 'http://localhost:8080',

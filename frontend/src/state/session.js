@@ -26,13 +26,14 @@ export const useSessionStore = create((set, get) => ({
       set({ status: SessionStatus.AUTHENTICATED, user: profile, error: null });
     } catch (error) {
       if (error.status === 401) {
+        // A definite answer: there is no session. Anything else leaves us genuinely unsure.
         set({ status: SessionStatus.ANONYMOUS, user: null, error: null });
         return;
       }
-      // Anything else — an unreachable server, a 5xx — is treated as "not signed in yet", with the
-      // error kept so the sign-in screen can explain what happened. Staying in UNKNOWN forever would
-      // leave the app on a spinner whose only escape is a reload.
-      set({ status: SessionStatus.ANONYMOUS, user: null, error });
+      // Unreachable server, timeout or 5xx: we do not know whether there is a session, so we stay
+      // UNKNOWN and keep the error. The route guards render an explanation with a retry — pretending
+      // the user is signed out would send them to a login form that cannot possibly work either.
+      set({ status: SessionStatus.UNKNOWN, user: null, error });
     }
   },
 
@@ -62,6 +63,17 @@ export const useSessionStore = create((set, get) => ({
     } finally {
       set({ status: SessionStatus.ANONYMOUS, user: null });
     }
+  },
+
+  /** Re-runs the start-up session check (used by the "Try again" action). */
+  async retry() {
+    set({ status: SessionStatus.UNKNOWN, error: null });
+    await get().bootstrap();
+  },
+
+  /** Dismisses a stale bootstrap error once the server is reachable again. */
+  clearError() {
+    set({ error: null });
   },
 
   /** Applied when any API call or the socket reports that the session is gone. */

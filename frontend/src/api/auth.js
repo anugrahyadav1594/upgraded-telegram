@@ -14,7 +14,13 @@ export const authApi = {
   login: async (payload) => (await http.post(endpoints.login(), payload)).user,
   logout: () => http.post(endpoints.logout()),
   logoutAll: () => http.post(endpoints.logoutAll()),
-  me: () => http.get(endpoints.currentSession()),
+  /**
+   * The start-up session check.
+   *
+   * Given a tighter deadline than ordinary requests: this call gates the whole application, and if the
+   * backend is not running the user deserves to be told in seconds rather than two minutes.
+   */
+  me: (options) => http.get(endpoints.currentSession(), { timeout: 8000, ...options }),
   listSessions: () => http.get(endpoints.sessions()),
   revokeSession: (id) => http.delete(endpoints.session(id)),
   changePassword: (payload) => http.post(endpoints.changePassword(), payload),
