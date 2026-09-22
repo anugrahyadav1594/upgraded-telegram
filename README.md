@@ -91,6 +91,29 @@ The Vite dev server proxies `/api` and `/ws` to the backend so the browser only 
 the same shape as production, which is what keeps the session cookie first-party and `SameSite=Lax`
 valid during development instead of papering over a cross-origin cookie problem with CORS.
 
+### See the interface without Java or Docker
+
+The frontend only needs something that answers the documented API contract, so `tools/preview` is a
+small stand-in server: it holds the same JSON shapes as the backend, broadcasts the same STOMP frames,
+and accepts any credentials. Useful for looking at the UI, reviewing a design change, or capturing the
+screenshots below — it is **development tooling and is never part of the application, the build or the
+tests**.
+
+```bash
+node tools/preview/server.js                 # terminal 1 — stub API + realtime on :8080
+cd frontend && npm install && npm run dev    # terminal 2 — the app on :5173
+```
+
+Sign in with anything (`alex` / `alex@example.test` are the fixture's names). Conversation changes can
+even be pushed at it while the page is open:
+
+```bash
+curl -X POST http://localhost:8080/__preview/emit \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"typing.started","payload":{"conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+       "userId":"22222222-2222-4222-8222-222222222222","displayName":"Ghost","expiresInMs":6000}}'
+```
+
 ### Tests and checks
 
 ```bash
@@ -103,9 +126,26 @@ python3 tools/verify/java_static_check.py --strict      # structural checks on t
 
 ---
 
+## Screenshots
+
+Captured from this codebase with `tools/preview/capture.mjs` ([what that means](docs/screenshots/README.md) —
+the layout and behaviour are the real application, the messages are fixture data).
+
+| Sign in | Conversation |
+| --- | --- |
+| ![Sign in](docs/screenshots/01-sign-in-light.png) | ![Conversation, dark](docs/screenshots/06-conversation-dark.png) |
+| ![Typing indicator](docs/screenshots/07-typing-indicator-dark.png) | ![Mobile thread](docs/screenshots/14-mobile-conversation.png) |
+
+All sixteen are in [docs/screenshots/](docs/screenshots/): sign-in, registration, password reset, the
+empty state, light and dark threads, a live typing indicator, notifications, settings, public profiles,
+both mobile layouts, and the "can't reach the server" screen.
+
+---
+
 ## Project layout
 
 ```
+tools/preview/    development-only UI harness: stub API + realtime, and the screenshot capture
 backend/          Spring Boot application (Java 21, Maven)
   src/main/java/com/realtimechat/{auth,users,profiles,conversations,messaging,presence,notifications,moderation,common,config}
   src/main/resources/db/migration/V1..V7   Flyway migrations (canonical copy)

@@ -58,6 +58,8 @@ export function useTypingPublisher(conversationId) {
  * Reads the typing state for a conversation and returns display names, excluding the current user.
  *
  * The store prunes entries whose TTL has lapsed, so this is a plain derivation with no timers of its own.
+ * The name comes from the typing frame itself and falls back to presence; presence alone is not enough,
+ * because it carries status and last-seen rather than names.
  */
 export function useTypingNames(conversationId) {
   const typing = useRealtimeStore((state) => (conversationId ? state.typing[conversationId] : undefined));
@@ -66,8 +68,9 @@ export function useTypingNames(conversationId) {
 
   if (!typing) return { names: [], text: '' };
   const names = Object.keys(typing)
+    .sort()
     .filter((id) => id !== userId)
-    .map((id) => participants[id]?.displayName || 'Someone');
+    .map((id) => typing[id]?.displayName || participants[id]?.displayName || 'Someone');
 
   if (names.length === 0) return { names: [], text: '' };
   if (names.length === 1) return { names, text: `${names[0]} is typing…` };

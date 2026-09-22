@@ -7,13 +7,14 @@ import { ConversationList } from '../components/ConversationList.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { MessageComposer } from '../components/MessageComposer.jsx';
+import { TypingIndicator } from '../components/TypingIndicator.jsx';
 import { MessageList } from '../components/MessageList.jsx';
 import { Modal } from '../components/Modal.jsx';
 import { ReportDialog } from '../components/ReportDialog.jsx';
 import { UserSearchPanel } from '../components/UserSearchPanel.jsx';
 import { useConversation, useConversations, useConversationActions, useCreateConversation } from '../hooks/useConversations.js';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
-import { useIsMobile } from '../hooks/useMediaQuery.js';
+import { useIsMobile, useIsTablet } from '../hooks/useMediaQuery.js';
 import { useMarkConversationRead, useMessageActions, useMessageHistory, useRetryMessage, useSendMessage } from '../hooks/useMessages.js';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { useSessionStore } from '../state/session.js';
@@ -30,7 +31,12 @@ import { focusElement } from '../utils/a11y.js';
 export function ChatPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
+  // Below the desktop breakpoint the chat surface shows one pane at a time (list *or* thread); at
+  // desktop all three columns are visible at once. The CSS breakpoints and these flags describe the
+  // same boundary, so they are derived from the same queries.
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  const isCompact = isMobile || isTablet;
   const user = useSessionStore((state) => state.user);
   const pushToast = useNotificationStore((state) => state.pushToast);
 
@@ -134,9 +140,9 @@ export function ChatPage() {
 
   const threadOpen = Boolean(conversationId && conversation);
   const shellClass = [
-    'app-shell__main',
-    isMobile && threadOpen ? 'app-shell--thread-open' : '',
-    isMobile && !threadOpen ? 'app-shell--list-open' : '',
+    'chat-layout',
+    isCompact && threadOpen ? 'app-shell--thread-open' : '',
+    isCompact && !threadOpen ? 'app-shell--list-open' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -250,6 +256,8 @@ export function ChatPage() {
                 })
               }
             />
+
+            <TypingIndicator conversationId={conversation.id} />
 
             <MessageComposer
               conversationId={conversation.id}

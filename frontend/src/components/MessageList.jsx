@@ -5,7 +5,7 @@ import { EmptyState } from './EmptyState.jsx';
 import { LoadingBlock } from './Spinner.jsx';
 import { Icon } from './Icon.jsx';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.js';
-import { useOutboxStore } from '../state/outbox.js';
+import { EMPTY_QUEUE, useOutboxStore } from '../state/outbox.js';
 import { dayLabel } from '../utils/time.js';
 
 /**
@@ -43,7 +43,10 @@ export function MessageList({
   const bottomRef = useRef(null);
   const stickToBottomRef = useRef(true);
 
-  const optimisticEntries = useOutboxStore((state) => state.byConversation[conversationId] || []);
+  // `?? EMPTY_QUEUE` rather than `|| []`: the fallback must keep a stable identity (see state/outbox.js).
+  const optimisticEntries = useOutboxStore(
+    (state) => state.byConversation[conversationId] ?? EMPTY_QUEUE,
+  );
   const topSentinel = useInfiniteScroll(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, { enabled: Boolean(hasNextPage), rootMargin: '300px' });

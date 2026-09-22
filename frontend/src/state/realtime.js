@@ -14,7 +14,7 @@ export const useRealtimeStore = create((set, get) => ({
   lastDisconnectedAt: null,
   reconnectAttempt: 0,
 
-  /** conversationId → Map(userId → {expiresAt}) for typing; entries expire client-side too. */
+  /** conversationId → { userId → { displayName, expiresAt } } for typing; entries expire client-side too. */
   typing: {},
   presence: {},
   unreadByConversation: {},
@@ -51,11 +51,24 @@ export const useRealtimeStore = create((set, get) => ({
     });
   },
 
-  setTyping(conversationId, userId, isTyping) {
+  /**
+   * Records that somebody is (or is no longer) typing.
+   *
+   * The display name has to be kept here, from the frame: the presence map carries status and
+   * last-seen, not names, so deriving the label from presence would label every typist "Someone".
+   * The TTL comes from the server's `expiresInMs` when it is sent, so a client's clock skew cannot
+   * leave a typist on screen longer than the server believes they are typing.
+   */
+  setTyping(conversationId, userId, isTyping, { displayName, expiresInMs } = {}) {
+    if (!conversationId || !userId) return;
     set((store) => {
       const forConversation = { ...(store.typing[conversationId] || {}) };
       if (isTyping) {
-        forConversation[userId] = { expiresAt: Date.now() + 6000 };
+        const ttl = Number.isFinite(expiresInMs) && expiresInMs > 0 ? expiresInMs : 6000;
+        forConversation[userId] = {
+          displayName: displayName || forConversation[userId]?.displayName || null,
+          expiresAt: Date.now() + ttl,
+        };
       } else {
         delete forConversation[userId];
       }

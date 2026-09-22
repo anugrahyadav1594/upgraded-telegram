@@ -22,6 +22,16 @@ export const OutboxState = Object.freeze({
   FAILED: 'FAILED',
 });
 
+/**
+ * Shared empty array.
+ *
+ * Components select their queue with `state.byConversation[id] ?? EMPTY_QUEUE`. That fallback must be a
+ * single object with a stable identity: zustand v5 runs selectors through `useSyncExternalStore`, which
+ * re-renders whenever the selected value differs by reference. `|| []` would allocate a new array on
+ * every call and re-render forever — the classic "getSnapshot should be cached" loop.
+ */
+export const EMPTY_QUEUE = Object.freeze([]);
+
 const RANK = {
   [OutboxState.SENDING]: 0,
   [OutboxState.SENT]: 1,

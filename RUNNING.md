@@ -328,6 +328,73 @@ cp .env.example .env.local
 
 ---
 
+## Path C: the interface only (no Java, no Docker)
+
+When the goal is to *look* at the UI — a design review, a screenshot, showing someone the product —
+none of the backend is needed. `tools/preview/server.js` answers the documented API contract from memory
+and speaks the same STOMP frames over `/ws`.
+
+```bash
+node tools/preview/server.js                 # terminal 1 — stub API + realtime on :8080
+cd frontend && npm install && npm run dev    # terminal 2 — the app on :5173
+open http://localhost:5173
+```
+
+Sign in with any username and password; there is nothing to validate against. The fixture data covers
+unread and muted conversations, edited and deleted messages, reactions, read receipts and
+notifications, so most screens have something to show.
+
+**If the interface feels slow, this is the fix.** `npm run dev` sends the app as ~90 separate,
+uncompressed module requests; the built bundle is ~10 compressed ones, which on a modest connection is
+the difference between a few seconds of blank screen and a fraction of a second. Measured here on the
+same machine and network conditions (1.6 Mbps, 150 ms RTT):
+
+| | Requests | Transferred | Time to a usable screen |
+| --- | --- | --- | --- |
+| `npm run dev` | 88 | 6.6 MB | 2.6 s |
+| `npm run build && npm run preview` | 8 | 0.44 MB | 0.6 s |
+
+```bash
+cd frontend
+npm run build                                # then
+npm run preview                              # http://localhost:4173, same /api and /ws proxy
+```
+
+Use `dev` while editing (hot reload) and `preview` whenever you are just looking at, demoing or
+screenshotting the app.
+
+**This is not the backend.** It is development tooling, it is not wired into the application, the build
+or the tests, and it deliberately implements only what the UI reads. Anything to do with persistence,
+authentication, rate limits or moderation has to be exercised against Path A or Path B.
+
+Two handy controls while the stub is running:
+
+```bash
+# Push a realtime frame at every open browser (typing, a new message, a read receipt, …)
+curl -X POST http://localhost:8080/__preview/emit \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"typing.started","payload":{"conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+       "userId":"22222222-2222-4222-8222-222222222222","displayName":"Ghost","expiresInMs":6000}}'
+
+# Put the fixtures back as they were
+curl -X POST http://localhost:8080/__preview/reset -H 'Content-Type: application/json' -d '{}'
+```
+
+### Regenerating the screenshots
+
+```bash
+node tools/preview/server.js                 # terminal 1
+cd frontend && npm run dev                   # terminal 2
+cd tools/preview && npm install              # puppeteer-core only; it drives a browser you already have
+node capture.mjs                              # writes docs/screenshots/*.png
+```
+
+`capture.mjs` finds Chrome or Edge automatically; set `BROWSER_PATH=/path/to/chrome` if yours is
+somewhere unusual. On a machine with no browser at all, `npm install --no-save @sparticuz/chromium`
+provides one and the script will use it.
+
+---
+
 ## Tests and checks
 
 ### Frontend

@@ -82,7 +82,7 @@ export function useRealtime({ onSessionRevoked } = {}) {
             break;
           }
           case 'typing.started':
-            useRealtimeStore.getState().setTyping(conversationId, payload.userId, true);
+            useRealtimeStore.getState().setTyping(conversationId, payload.userId, true, payload);
             break;
           case 'typing.stopped':
             useRealtimeStore.getState().setTyping(conversationId, payload.userId, false);
@@ -115,6 +115,14 @@ export function useRealtime({ onSessionRevoked } = {}) {
 
       onEvent: (frame) => {
         const payload = frame?.payload || frame;
+        if (frame?.type === 'typing.started' || frame?.type === 'typing.stopped') {
+          // The protocol lists typing on both `/user/queue/events` and the conversation topic; handling
+          // it here as well costs nothing and means the indicator works on either route.
+          useRealtimeStore
+            .getState()
+            .setTyping(payload.conversationId, payload.userId, frame.type === 'typing.started', payload);
+          return;
+        }
         if (frame?.type === 'notification.new') {
           notifications.receive(payload.notification || payload);
           return;

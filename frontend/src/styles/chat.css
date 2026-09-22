@@ -7,18 +7,49 @@
  */
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  /*
+   * Two columns: the icon rail, then everything else. The rail has its own token — using the sidebar
+   * width here made the navigation column 320px wide, as wide as the conversation list beside it.
+   *
+   * The row is `minmax(0, 1fr)` so a long conversation scrolls *inside* the thread instead of growing
+   * the page: with an implicit `auto` row, content as tall as the message history stretches the shell.
+   */
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
   background: var(--bg-canvas);
 }
 
+/*
+ * Everything to the right of the rail. A wrapper rather than a layout of its own: it exists so the
+ * page inside it fills the column and cannot push the shell taller than the viewport.
+ */
 .app-shell__main {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border-left: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+/*
+ * The chat surface: conversation list + open thread.
+ *
+ * This used to be another `.app-shell__main`, which nested the same two-column grid inside itself —
+ * the inner grid ended up in the outer grid's first 320px track, squeezing the thread to nothing and
+ * wrapping every message one word per line. It has its own name now.
+ */
+.chat-layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
   background: var(--bg-surface);
 }
 
@@ -62,6 +93,7 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
   border-right: 1px solid var(--border-subtle);
   background: var(--bg-surface);
 }
@@ -176,6 +208,7 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
   background: var(--bg-canvas);
 }
 
@@ -192,6 +225,11 @@
 .thread__identity {
   min-width: 0;
   flex: 1;
+  /* Column, not inline: the name and the presence line are two spans, and inline they ran together
+     as "GhostOnline". */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .thread__name {
@@ -428,8 +466,24 @@
     grid-template-columns: 56px minmax(0, 1fr);
   }
 
-  .app-shell__main {
+  /*
+   * One pane at a time: with a thread open it replaces the list in the content column, and the list is
+   * shown at full width when nothing is selected. `ChatPage` adds the modifier classes below 1024px.
+   */
+  .chat-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell--thread-open .conversation-pane {
+    display: none;
+  }
+
+  .app-shell--list-open .thread {
+    display: none;
+  }
+
+  .mobile-back {
+    display: inline-flex;
   }
 
   .conversation-pane {
@@ -443,19 +497,12 @@
     grid-template-rows: minmax(0, 1fr) auto;
   }
 
-  .app-shell__main {
+  .chat-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .app-shell--thread-open .conversation-pane {
-    display: none;
-  }
-
-  .app-shell--list-open .thread {
-    display: none;
-  }
-
   .nav-rail {
+    order: 2; /* the rail is a bottom bar on a phone, regardless of where it sits in the DOM */
     flex-direction: row;
     justify-content: space-between;
     padding: 0 var(--space-4);
@@ -467,10 +514,6 @@
   .nav-rail__top,
   .nav-rail__bottom {
     flex-direction: row;
-  }
-
-  .mobile-back {
-    display: inline-flex;
   }
 
   .message {
