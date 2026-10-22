@@ -1,0 +1,60 @@
+# =====================================================================================
+# Development profile — the default for `mvn spring-boot:run` and `npm run dev`.
+# Local infrastructure, verbose logging, dev-only conveniences.
+# =====================================================================================
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/realtime_chat}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  # Local development is plain HTTP; the session cookie must not require TLS here or the
+  # browser silently drops it.
+  port: ${SERVER_PORT:8080}
+
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:5173}
+  session:
+    secure-cookie: ${SESSION_COOKIE_SECURE:false}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+  websocket:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+  mail:
+    # No SMTP locally: password-reset links are written to the application log instead of
+    # being faked. Set MAIL_ENABLED=true with real SMTP credentials to send real mail.
+    enabled: ${MAIL_ENABLED:false}
+  dev-seed:
+    # Seeding requires an explicit password (DEV_SEED_PASSWORD); without it nothing is created.
+    enabled: ${DEV_SEED_ENABLED:false}
+    password: ${DEV_SEED_PASSWORD:}
+
+# Interactive API documentation is enabled in development only.
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    try-it-out-enabled: true
+  show-actuator: false
+
+logging:
+  level:
+    com.realtimechat: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.web.socket: DEBUG
+    org.springframework.messaging: DEBUG
+    org.flywaydb: INFO

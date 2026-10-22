@@ -1,0 +1,180 @@
+# =====================================================================================
+# REALCHAT — complete local/production-like stack.
+#
+#   cp .env.example .env      # set POSTGRES_PASSWORD and SESSION_SECRET at minimum
+#   docker compose -f infrastructure/docker-compose.yml up -d --build
+#   open http://localhost:8080
+#
+# Services address each other by compose service name (postgres, redis, backend, frontend) —
+# never by localhost, which would only ever point at the container itself. Every dependency
+# has a health check so `depends_on: condition: service_healthy` means what it says.
+# =====================================================================================
+name: realtime-chat
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-realtime_chat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-realtime_chat}
+      # Deterministic collation keeps index ordering identical between machines.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      # Published on the loopback interface only. The schema is created by Flyway when the backend
+      # starts (not by an initdb script), but a locally-run backend and psql on the host both need to
+      # reach this port — and nothing on the LAN should be able to.
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [realtime-net]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    # appendonly keeps presence/typing state across a restart; the password is optional locally and
+    # required in production (see docs/deployment.md §6).
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --save "" $${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}']
+    volumes:
+      - redis-data:/data
+    ports:
+      # Loopback only, for the local-development workflow (backend on the host, Redis in Docker).
+      - '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli $${REDIS_PASSWORD:+-a $REDIS_PASSWORD} --no-auth-warning ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [realtime-net]
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../infrastructure/docker/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: '8080'
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-realtime_chat}
+      DATABASE_USERNAME: ${POSTGRES_USER:-realtime_chat}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-7d}
+      SESSION_ABSOLUTE_TIMEOUT: ${SESSION_ABSOLUTE_TIMEOUT:-30d}
+      SESSION_SAME_SITE: ${SESSION_SAME_SITE:-Lax}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@realtime-chat.local}
+      DEV_SEED_ENABLED: ${DEV_SEED_ENABLED:-false}
+      DEV_SEED_PASSWORD: ${DEV_SEED_PASSWORD:-}
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+    # Not published to the host: the edge proxy is the only way in, so the API is not reachable
+    # directly on a machine that happens to be on the same network.
+    expose:
+      - '8080'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks: [realtime-net]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../infrastructure/docker/frontend.Dockerfile
+      args:
+        # Same-origin deployment: the SPA talks to /api and /ws on its own host.
+        VITE_API_BASE: ''
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - '80'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [realtime-net]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    ports:
+      - '${HTTP_PORT:-8080}:8080'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:8080/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [realtime-net]
+
+  # Optional: apply the development seed.
+  #   docker compose -f infrastructure/docker-compose.yml --profile seed run --rm seed
+  # Requires SEED_PASSWORD_HASH (an Argon2id PHC string) in .env — never a plaintext password.
+  seed:
+    image: postgres:16-alpine
+    profiles: [seed]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_USER: ${POSTGRES_USER:-realtime_chat}
+      POSTGRES_DB: ${POSTGRES_DB:-realtime_chat}
+      SEED_PASSWORD_HASH: ${SEED_PASSWORD_HASH:?set SEED_PASSWORD_HASH in .env (argon2id PHC string)}
+    volumes:
+      - ../database/seed:/seed:ro
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+        -v seed_password_hash="$$SEED_PASSWORD_HASH"
+        -f /seed/dev_seed.sql
+    networks: [realtime-net]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  realtime-net:
+    driver: bridge

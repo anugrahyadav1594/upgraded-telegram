@@ -1,0 +1,21 @@
+{
+  "name": "realtime-chat-preview",
+  "version": "1.0.0",
+  "description": "Development-only UI preview harness: serves the documented API contract so the frontend can be demonstrated and screenshotted without the Java backend. Never used by the application.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "capture": "node capture.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.11.0"
+  }
+}

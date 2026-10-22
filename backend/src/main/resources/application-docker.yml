@@ -1,0 +1,46 @@
+# =====================================================================================
+# Docker profile — used by infrastructure/docker-compose.yml.
+# Services are addressed by their compose service names, never localhost.
+# =====================================================================================
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://postgres:5432/realtime_chat}
+    username: ${DATABASE_USERNAME:realtime_chat}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:10}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+server:
+  port: 8080
+
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:8080}
+  session:
+    # Compose terminates TLS at the edge in production; the browser profile (http://localhost)
+    # is used for the default quick-start, so this is environment driven.
+    secure-cookie: ${SESSION_COOKIE_SECURE:false}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8080}
+  websocket:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8080}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+  dev-seed:
+    enabled: ${DEV_SEED_ENABLED:false}
+    password: ${DEV_SEED_PASSWORD:}
+
+springdoc:
+  api-docs:
+    enabled: ${OPENAPI_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${OPENAPI_ENABLED:true}
+
+logging:
+  level:
+    com.realtimechat: ${LOG_LEVEL_APP:INFO}

@@ -1,0 +1,69 @@
+# =====================================================================================
+# Production profile.
+#
+# Fails fast instead of starting in an insecure configuration:
+#   * SESSION_SECRET must be set to a strong random value (validated at startup)
+#   * cookies are Secure
+#   * API documentation is disabled
+#   * SQL logging is off
+# See docs/deployment.md §6 for the full hardening checklist.
+# =====================================================================================
+spring:
+  datasource:
+    url: ${DATABASE_URL}                    # no default: a production URL must be explicit
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 5000
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+  jpa:
+    show-sql: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  # TLS is terminated at the edge; trust the forwarded protocol/host headers.
+  forward-headers-strategy: framework
+
+app:
+  public-url: ${APP_PUBLIC_URL}
+  session:
+    secure-cookie: true
+    same-site: ${SESSION_SAME_SITE:Lax}
+    secret: ${SESSION_SECRET}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  websocket:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  mail:
+    enabled: true                            # password reset must actually deliver in production
+  dev-seed:
+    enabled: false                           # never seed a production database
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus       # metrics scraped by the monitoring network
+
+logging:
+  level:
+    root: WARN
+    com.realtimechat: INFO
+  # Structured, single-line JSON in production so log processors can index fields.
+  pattern:
+    console: "{\"ts\":\"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}\",\"level\":\"%level\",\"logger\":\"%logger{36}\",\"thread\":\"%thread\",\"msg\":\"%replace(%msg){'\"','\\\\\"'}\",\"requestId\":\"%X{requestId:-}\",\"userId\":\"%X{userId:-}\"}%n"

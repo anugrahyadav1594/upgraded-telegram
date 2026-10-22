@@ -1,0 +1,562 @@
+/**
+ * Application shell and chat surface.
+ *
+ * Desktop is a three-column layout (navigation, conversation list, thread). Tablet drops to two
+ * columns; mobile is a *separate* navigation model — a full-screen list that pushes to a full-screen
+ * thread — because a shrunken three-column view is unusable on a phone, not merely ugly.
+ */
+.app-shell {
+  display: grid;
+  /*
+   * Two columns: the icon rail, then everything else. The rail has its own token — using the sidebar
+   * width here made the navigation column 320px wide, as wide as the conversation list beside it.
+   *
+   * The row is `minmax(0, 1fr)` so a long conversation scrolls *inside* the thread instead of growing
+   * the page: with an implicit `auto` row, content as tall as the message history stretches the shell.
+   */
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+/*
+ * Everything to the right of the rail. A wrapper rather than a layout of its own: it exists so the
+ * page inside it fills the column and cannot push the shell taller than the viewport.
+ */
+.app-shell__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+/*
+ * The chat surface: conversation list + open thread.
+ *
+ * This used to be another `.app-shell__main`, which nested the same two-column grid inside itself —
+ * the inner grid ended up in the outer grid's first 320px track, squeezing the thread to nothing and
+ * wrapping every message one word per line. It has its own name now.
+ */
+.chat-layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+}
+
+/* Small navigation rail for the signed-in user's own surfaces. */
+.nav-rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) 0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.nav-rail__top,
+.nav-rail__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nav-rail__badge {
+  position: absolute;
+  transform: translate(12px, -12px);
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+.icon-btn--badged {
+  position: relative;
+}
+
+/* ---------- conversation list ---------- */
+.conversation-pane {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.conversation-pane__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.conversation-pane__title {
+  font-size: var(--text-lg);
+}
+
+.conversation-search {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.conversation-search input {
+  background: var(--bg-subtle);
+  border-color: transparent;
+}
+
+.conversation-list {
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-4);
+}
+
+.conversation-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conversation-item:hover {
+  background: var(--bg-subtle);
+}
+
+.conversation-item[aria-current='true'] {
+  background: var(--accent-subtle);
+}
+
+.conversation-item__body {
+  min-width: 0;
+}
+
+.conversation-item__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.conversation-item__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-item__time {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.conversation-item__preview {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-item__badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.badge--muted {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+/* ---------- thread ---------- */
+.thread {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-canvas);
+}
+
+.thread__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  min-height: var(--header-height);
+}
+
+.thread__identity {
+  min-width: 0;
+  flex: 1;
+  /* Column, not inline: the name and the presence line are two spans, and inline they ran together
+     as "GhostOnline". */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.thread__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread__presence {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.thread__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.typing-line {
+  padding: 0 var(--space-4) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  min-height: 20px;
+}
+
+.message-list {
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.day-divider {
+  align-self: center;
+  margin: var(--space-3) 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+}
+
+.message {
+  display: flex;
+  gap: var(--space-2);
+  max-width: min(680px, 78%);
+  align-items: flex-end;
+}
+
+.message--out {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.message__body {
+  background: var(--bg-bubble-in);
+  color: var(--text-bubble-in);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message--out .message__body {
+  background: var(--bg-bubble-out);
+  color: var(--text-bubble-out);
+}
+
+.message--failed .message__body {
+  border: 1px solid var(--danger);
+}
+
+.message--pending .message__body {
+  opacity: 0.72;
+}
+
+.message__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.message--out .message__meta {
+  justify-content: flex-end;
+}
+
+.message__receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.message__receipt--read {
+  color: var(--accent);
+}
+
+.message__sender {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.message__edited {
+  font-style: italic;
+}
+
+.message__tombstone {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.message__actions {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .message__actions,
+.message:focus-within .message__actions {
+  opacity: 1;
+}
+
+.reaction-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  padding: 1px 8px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.reaction-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.emoji-picker {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.emoji-picker button {
+  border: none;
+  background: transparent;
+  font-size: var(--text-lg);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+}
+
+.emoji-picker button:hover {
+  background: var(--bg-subtle);
+}
+
+.composer {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.composer textarea {
+  border-radius: var(--radius-lg);
+  min-height: 44px;
+  max-height: 160px;
+}
+
+.composer__counter {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: var(--space-1);
+}
+
+.composer__counter--warn {
+  color: var(--warning);
+}
+
+.composer__counter--over {
+  color: var(--danger);
+}
+
+.composer__reply {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+/* Mobile: one pane at a time, with a back affordance — not a squeezed desktop layout. */
+.mobile-back {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .app-shell {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  /*
+   * One pane at a time: with a thread open it replaces the list in the content column, and the list is
+   * shown at full width when nothing is selected. `ChatPage` adds the modifier classes below 1024px.
+   */
+  .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell--thread-open .conversation-pane {
+    display: none;
+  }
+
+  .app-shell--list-open .thread {
+    display: none;
+  }
+
+  .mobile-back {
+    display: inline-flex;
+  }
+
+  .conversation-pane {
+    border-right: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nav-rail {
+    order: 2; /* the rail is a bottom bar on a phone, regardless of where it sits in the DOM */
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+    height: 56px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .nav-rail__top,
+  .nav-rail__bottom {
+    flex-direction: row;
+  }
+
+  .message {
+    max-width: 88%;
+  }
+
+  .thread__header {
+    min-height: 56px;
+  }
+}
+
+/* Animated typing dots; the animation is suppressed for users who ask for reduced motion. */
+.typing-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.typing-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}

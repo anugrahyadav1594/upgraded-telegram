@@ -1,0 +1,117 @@
+/**
+ * Design tokens.
+ *
+ * Everything visual is expressed as a token so the light/dark switch is a single attribute change on
+ * <html> rather than a second stylesheet. Colours are chosen to meet WCAG AA (4.5:1) for body text in
+ * both themes — the dark palette is not a mechanical inversion, it is picked for legibility.
+ */
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.18);
+
+  --sidebar-width: 320px;
+  --rail-width: 72px;
+  --header-height: 64px;
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+
+  /* Layout breakpoints, referenced in comments so JS and CSS stay in step. */
+  --bp-mobile: 767px;
+  --bp-tablet: 1023px;
+}
+
+:root,
+[data-theme='light'] {
+  --bg-canvas: #f6f7f9;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-subtle: #eef0f4;
+  --bg-overlay: rgba(15, 23, 42, 0.45);
+  --bg-bubble-out: #1f6feb;
+  --bg-bubble-out-hover: #1a62d2;
+  --bg-bubble-in: #f1f3f6;
+
+  --text-primary: #101828;
+  --text-secondary: #475467;
+  --text-muted: #667085;
+  --text-inverse: #ffffff;
+  --text-bubble-out: #ffffff;
+  --text-bubble-in: #101828;
+
+  --border-subtle: #e4e7ec;
+  --border-strong: #cfd4dc;
+  --focus-ring: #1f6feb;
+
+  --accent: #1f6feb;
+  --accent-hover: #1a62d2;
+  --accent-subtle: #e8f0fe;
+  --success: #12805c;
+  --warning: #b54708;
+  --danger: #b42318;
+  --danger-subtle: #fef3f2;
+  --online: #12b76a;
+}
+
+[data-theme='dark'] {
+  --bg-canvas: #0b0f16;
+  --bg-surface: #121926;
+  --bg-raised: #1a2233;
+  --bg-subtle: #1c2536;
+  --bg-overlay: rgba(3, 6, 12, 0.7);
+  --bg-bubble-out: #2f6feb;
+  --bg-bubble-out-hover: #3b7cf5;
+  --bg-bubble-in: #1c2536;
+
+  --text-primary: #f2f4f7;
+  --text-secondary: #c1c9d6;
+  --text-muted: #98a2b3;
+  --text-inverse: #0b0f16;
+  --text-bubble-out: #ffffff;
+  --text-bubble-in: #f2f4f7;
+
+  --border-subtle: #24304a;
+  --border-strong: #33415c;
+  --focus-ring: #6f9bff;
+
+  --accent: #4b8bf5;
+  --accent-hover: #6f9bff;
+  --accent-subtle: #17233a;
+  --success: #32d583;
+  --warning: #fdb022;
+  --danger: #f97066;
+  --danger-subtle: #2b1414;
+  --online: #32d583;
+}
+
+/* Honour the OS setting for users who never open the appearance settings. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-base: 0ms;
+  }
+}

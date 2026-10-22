@@ -1,0 +1,217 @@
+# =====================================================================================
+# ACTIVATION: copy this file into place to enable the pipeline.
+#
+#   mkdir -p .github/workflows && cp infrastructure/ci/ci.yml .github/workflows/ci.yml
+#   git add .github/workflows/ci.yml && git commit -m "Enable CI"
+#
+# Why it lives here rather than in .github/workflows already: this repository was prepared by a
+# GitHub App whose token does not carry the `workflows` permission, and GitHub refuses to accept a
+# commit that creates a file under .github/workflows from such a token. Keeping the pipeline here
+# means its content is reviewed and versioned like everything else, and enabling it is one copy.
+# =====================================================================================
+# =====================================================================================
+# Continuous integration (docs/deployment.md §7).
+#
+# Four jobs, mirroring the four things that can actually break this product:
+#   backend  — does it compile and do the tests pass, against real PostgreSQL and Redis?
+#   frontend — does it build, lint and pass its unit tests?
+#   verify   — are the database and the Java sources still self-consistent?
+#   e2e      — does the assembled product work end to end in a browser?
+#
+# The e2e job is the only one allowed to fail before the backend suites land, and it says so
+# explicitly rather than being quietly skipped.
+# =====================================================================================
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '22'
+
+jobs:
+  backend:
+    name: Backend (Maven verify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      # Testcontainers starts its own PostgreSQL and Redis containers; the runner only needs Docker,
+      # which is present on ubuntu-latest, so no service containers are declared here.
+      - name: Build and test
+        working-directory: backend
+        run: ./mvnw -B verify
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: |
+            backend/target/surefire-reports/**
+            backend/target/failsafe-reports/**
+            backend/target/site/jacoco/**
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test -- --coverage
+
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/**
+          if-no-files-found: ignore
+
+  verify:
+    name: Schema & source verification
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install verification dependencies
+        run: pip install pglast psycopg2-binary tree-sitter tree-sitter-java
+
+      - name: Migrations and seed against a live PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: python3 tools/verify/sql_verify.py --execute
+
+      - name: Java source checks
+        run: python3 tools/verify/java_static_check.py --strict
+
+      # Applied migrations are immutable: Flyway checksums them, so editing one breaks everybody's
+      # start-up. New files are always welcome; modified old ones never are.
+      - name: Reject changes to already-merged migrations
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}" --depth=1
+          CHANGED=$(git diff --name-status "$BASE"...HEAD -- \
+            'backend/src/main/resources/db/migration/V*' 'database/migrations/V*' \
+            | awk '$1 == "M" || $1 == "D" { print }')
+          if [ -n "$CHANGED" ]; then
+            echo "::error::Existing migrations were modified or deleted:"
+            echo "$CHANGED"
+            exit 1
+          fi
+          echo "No previously-merged migration was modified."
+
+  e2e:
+    name: End-to-end journey
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # The stack is started exactly the way a user starts it, so this job also proves the documented
+      # quick start works.
+      - name: Start the stack
+        run: |
+          cp .env.example .env
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password|" .env
+          sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -base64 48)|" .env
+          docker compose -f infrastructure/docker-compose.yml up -d --build
+
+      - name: Wait for readiness
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null; then
+              echo "Backend is ready after ${attempt} attempts."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::The stack did not become ready in time."
+          docker compose -f infrastructure/docker-compose.yml logs --tail=200
+          exit 1
+
+      - name: Run the end-to-end suite
+        working-directory: tests/e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            tests/e2e/playwright-report/**
+            tests/e2e/test-results/**
+          if-no-files-found: ignore
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f infrastructure/docker-compose.yml logs --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f infrastructure/docker-compose.yml down -v

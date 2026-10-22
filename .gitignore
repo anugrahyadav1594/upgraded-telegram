@@ -1,0 +1,48 @@
+# ---- Java / Maven ----
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---- Node / frontend ----
+node_modules/
+frontend/dist/
+frontend/coverage/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Environment & secrets ----
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+
+# ---- Build/runtime artefacts ----
+*.log
+logs/
+target/
+build/
+dist/
+coverage/
+.DS_Store
+Thumbs.db
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# ---- Python tooling (verification scripts) ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---- Local data volumes ----
+infrastructure/data/
+*.pid
